@@ -1,1 +1,1 @@
-# hopper_mpc_2d
+# hopper-mpc-2d

@@ -30,9 +30,13 @@ class Mpc:
         A = np.vstack((np.hstack((np.zeros((2, 2)), np.eye(2))), np.zeros((2, 4))))
         B = np.vstack((np.zeros((2, 2)), np.eye(2) / m))
         G = np.array([0, 0, 0, -g]).T
+        AB = np.vstack((np.hstack((A, B)), np.zeros((2, 6))))
+        M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
+        Ad = M[0:4, 0:4]
+        Bd = M[0:4, 4:6]
 
         Q = np.eye(n_states)  # TODO: play around with this
-        R = np.eye(n_controls)  # TODO: play around with this
+        R = np.eye(n_controls)*0.25  # TODO: play around with this
         cost = 0
         constr = []
 
@@ -41,14 +45,22 @@ class Mpc:
             cost += cp.quad_form(X[:, k+1] - X_ref, Q) + cp.quad_form(U[:, k], R)
             fx = U[0, k]
             fz = U[1, k]
-            constr += [X[:, k+1] == A @ X[:, k] + B @ U[:, k] + G,
-                       0 >= fx - mu*fz,
-                       0 >= -(fx + mu*fz)]
+            if (k % 2) == 0:  # even
+                constr += [X[:, k + 1] == Ad @ X[:, k] + Bd @ U[:, k] + G]
+            else:  # odd
+                constr += [X[:, k + 1] == Ad @ X[:, k] + Bd @ U[:, k] + G]
+                '''
+                constr += [X[:, k + 1] == Ad @ X[:, k] + Bd @ U[:, k] + G,
+                           0 >= fx - mu * fz,
+                           0 >= -(fx + mu * fz),
+                           0 <= fz]
+                           '''
 
-        constr += [X[:, 0] == X_in]  # initial condition
+        constr += [X[:, 0] == X_in, X[:, N] == X_ref]  # initial and final condition
+        # constr += [X[:, 0] == X_in]  # initial condition
         # --- set up solver --- #
         problem = cp.Problem(cp.Minimize(cost), constr)
         problem.solve(solver=cp.OSQP)  # , verbose=True)
-        u = np.zeros(2) if U.value is None else U.value
+        u = np.zeros((2, N)) if U.value is None else U.value
 
         return u

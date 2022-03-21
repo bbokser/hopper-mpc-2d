@@ -15,7 +15,7 @@ np.set_printoptions(suppress=True, linewidth=np.nan)
 class Runner:
     def __init__(self, dt=1e-3):
         self.dt = dt
-        self.total_run = 10000
+        self.total_run = 20000
         self.tol = 1e-3  # desired mpc tolerance
         self.hconst = 0.3
 
@@ -26,7 +26,7 @@ class Runner:
         self.t_p = 1  # gait period, seconds
         self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
         # for now, mpc sampling time is equal to gait period
-        self.mpc_t = copy.copy(self.t_p)  # mpc sampling time
+        self.mpc_t = copy.copy(self.t_p*self.phi_switch)  # mpc sampling time
         self.mpc = mpc_cvx.Mpc(t=self.mpc_t, N=N, m=self.m, mu=mu, g=self.g)
 
         self.sh = 1  # estimated contact state
@@ -51,7 +51,7 @@ class Runner:
 
         for k in range(0, self.total_run):
             t = t + self.dt
-            # gait scheduler
+
             s = self.gait_scheduler(t, t0)
 
             if mpc_counter == mpc_factor:  # check if it's time to restart the mpc
@@ -61,29 +61,44 @@ class Runner:
 
             mpc_counter += 1
 
-            f_hist[k, :] = force_f*s
+            f_hist[k, :] = force_f # *s
             X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
-
+        print(X_traj[-1, :])
+        print(f_hist[-1, :])
         plots.fplot(total, p_hist=X_traj[:, 0:2], f_hist=f_hist)
         plots.posplot(p_ref=self.X_ref[0:2], p_hist=X_traj[:, 0:2])
 
         return None
 
-    def dynamics(self, X, U):
+    def dynamics_ct(self, X, U):
         # CT dynamics X -> dX
         A = np.vstack((np.hstack((np.zeros((2, 2)), np.eye(2))), np.zeros((2, 4))))
         B = np.vstack((np.zeros((2, 2)), np.eye(2) / self.m))
         G = np.array([0, 0, 0, -self.g]).T
-        dX = A @ X + B @ U + G
-        return dX
+        X_next = A @ X + B @ U + G
+        return X_next
+
+    def dynamics_dt(self, X, U):
+        # DT dynamics X -> dX
+        t = self.dt
+        A = np.vstack((np.hstack((np.zeros((2, 2)), np.eye(2))), np.zeros((2, 4))))
+        B = np.vstack((np.zeros((2, 2)), np.eye(2) / self.m))
+        AB = np.vstack((np.hstack((A, B)), np.zeros((2, 6))))
+        M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
+        Ad = M[0:4, 0:4]
+        Bd = M[0:4, 4:6]
+        G = np.array([0, 0, 0, -self.g]).T
+        X_next = Ad @ X + Bd @ U + G
+        return X_next
 
     def rk4(self, xk, uk):
-        # solves for new X
+        # RK4 integrator solves for new X
+        dynamics = self.dynamics_ct
         h = self.dt
-        f1 = self.dynamics(xk, uk)
-        f2 = self.dynamics(xk + 0.5 * h * f1, uk)
-        f3 = self.dynamics(xk + 0.5 * h * f2, uk)
-        f4 = self.dynamics(xk + h * f3, uk)
+        f1 = dynamics(xk, uk)
+        f2 = dynamics(xk + 0.5 * h * f1, uk)
+        f3 = dynamics(xk + 0.5 * h * f2, uk)
+        f4 = dynamics(xk + h * f3, uk)
         return xk + (h / 6.0) * (f1 + 2 * f2 + 2 * f3 + f4)
 
     def gait_scheduler(self, t, t0):
