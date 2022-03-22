@@ -8,6 +8,7 @@ import mpc_cvx
 # import sys
 import numpy as np
 import copy
+from scipy.linalg import expm
 
 np.set_printoptions(suppress=True, linewidth=np.nan)
 
@@ -62,7 +63,9 @@ class Runner:
             mpc_counter += 1
 
             f_hist[k, :] = force_f # *s
-            X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
+            # X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
+            X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
+
         print(X_traj[-1, :])
         print(f_hist[-1, :])
         plots.fplot(total, p_hist=X_traj[:, 0:2], f_hist=f_hist)
@@ -83,11 +86,11 @@ class Runner:
         t = self.dt
         A = np.vstack((np.hstack((np.zeros((2, 2)), np.eye(2))), np.zeros((2, 4))))
         B = np.vstack((np.zeros((2, 2)), np.eye(2) / self.m))
+        G = np.array([0, 0, 0, -self.g]).T
         AB = np.vstack((np.hstack((A, B)), np.zeros((2, 6))))
-        M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
+        M = expm(AB * t)
         Ad = M[0:4, 0:4]
         Bd = M[0:4, 4:6]
-        G = np.array([0, 0, 0, -self.g]).T
         X_next = Ad @ X + Bd @ U + G
         return X_next
 

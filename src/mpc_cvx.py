@@ -4,7 +4,7 @@ Copyright (C) 2021-2022 Benjamin Bokser
 
 import numpy as np
 import cvxpy as cp
-
+from scipy.linalg import expm
 
 class Mpc:
 
@@ -31,7 +31,8 @@ class Mpc:
         B = np.vstack((np.zeros((2, 2)), np.eye(2) / m))
         G = np.array([0, 0, 0, -g]).T
         AB = np.vstack((np.hstack((A, B)), np.zeros((2, 6))))
-        M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
+        M = expm(AB*t)
+        # M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
         Ad = M[0:4, 0:4]
         Bd = M[0:4, 4:6]
 
@@ -62,5 +63,6 @@ class Mpc:
         problem = cp.Problem(cp.Minimize(cost), constr)
         problem.solve(solver=cp.OSQP)  # , verbose=True)
         u = np.zeros((2, N)) if U.value is None else U.value
-
+        # print(X.value)
+        # breakpoint()
         return u
