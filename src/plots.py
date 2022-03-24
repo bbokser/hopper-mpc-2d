@@ -10,7 +10,7 @@ import itertools
 
 def fplot(total, p_hist, f_hist, s_hist):
 
-    fig, axs = plt.subplots(5, sharex="all")
+    fig, axs = plt.subplots(4, sharex="all")
     plt.xlabel("Timesteps")
 
     axs[0].plot(range(total), p_hist[:, 1], color='blue')
@@ -29,9 +29,9 @@ def fplot(total, p_hist, f_hist, s_hist):
     axs[3].set_title('Scheduled Contact')  # .set_title('angular velocity q1_dot')
     axs[3].set_ylabel("True/False")  # .set_ylabel("angular velocity, rpm")
 
-    axs[4].plot(range(total), s_hist[:, 1], color='blue')
-    axs[4].set_title('Expected Contact')  # .set_title('angular velocity q1_dot')
-    axs[4].set_ylabel("True/False")  # .set_ylabel("angular velocity, rpm")
+    # axs[4].plot(range(total), s_hist[:, 1], color='blue')
+    # axs[4].set_title('Expected Contact')  # .set_title('angular velocity q1_dot')
+    # axs[4].set_ylabel("True/False")  # .set_ylabel("angular velocity, rpm")
 
     plt.show()
 

@@ -17,26 +17,27 @@ np.set_printoptions(suppress=True, linewidth=np.nan)
 class Runner:
     def __init__(self, dt=1e-3):
         self.dt = dt
-        self.total_run = 10000
+        self.total_run = 5000
         self.tol = 1e-3  # desired mpc tolerance
         self.hconst = 0.3
         self.n_x = 5  # number of states
         self.n_u = 2  # number of controls
         self.m = 6  # mass of the robot
-        self.N = 4  # mpc horizon length
+        self.N = 10  # mpc horizon length
         mu = 0.3  # coeff of friction
         self.g = 9.81  # gravitational acceleration, m/s2
         self.t_p = 1  # gait period, seconds
         self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
         # for now, mpc sampling time is equal to gait period
         self.mpc_t = copy.copy(self.t_p*self.phi_switch)  # mpc sampling time
-        self.mpc = mpc_cvx.Mpc(t=self.mpc_t, N=self.N, m=self.m, mu=mu)
+        self.mpc = mpc_cvx.Mpc(t=self.mpc_t, N=self.N, m=self.m, g=self.g, mu=mu)
 
         self.sh = 1  # estimated contact state
 
         self.pos_ref = np.array([1, 1])  # desired body position in world coords
         self.vel_ref = np.array([0, 0])  # desired body velocity in world coords
         self.X_ref = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired state
+        self.closed_loop = True
 
     def run(self):
         total = self.total_run + 1  # number of timesteps to plot
@@ -68,21 +69,24 @@ class Runner:
             mpc_counter += 1
 
             s_hist[k, :] = [s, sh]
-            f_hist[k, :] = force_f[:, 0]
-            '''
-            # Open loop traj opt
-            # make sure self.total_run = 5000 and self.N = 10
-            if k == 0:
-                j = 500 # int(self.total_run/self.N)
-                print("j = ", j)
-                for i in range(0, self.N):
-                    f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[:, i], j))
-            '''
-            # X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
-            X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
+
+            if self.closed_loop:
+                f_hist[k, :] = force_f[:, 0]
+
+            else:
+                # Open loop traj opt
+                # make sure self.total_run = 5000 and self.N = 10
+                if k == 0:
+                    j = 500 # int(self.total_run/self.N)
+                    print("j = ", j)
+                    for i in range(0, self.N):
+                        f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[:, i], j))
+
+            X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
+            # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
 
         print(X_traj[-1, :])
-        print(f_hist[9263, :])
+        print(f_hist[4500, :])
         plots.fplot(total, p_hist=X_traj[:, 0:2], f_hist=f_hist, s_hist=s_hist)
         plots.posplot3d(p_ref=self.X_ref[0:2], p_hist=X_traj[:, 0:2], total=total)
 

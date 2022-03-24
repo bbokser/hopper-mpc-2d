@@ -9,11 +9,12 @@ from scipy.linalg import expm
 
 class Mpc:
 
-    def __init__(self, t, N, m, mu, **kwargs):
+    def __init__(self, t, N, m, g, mu, **kwargs):
         self.t = t  # sampling time (s)
         self.N = N  # prediction horizon
         self.m = m  # kg
         self.mu = mu  # coefficient of friction
+        self.g = g
 
     def mpcontrol(self, X_in, X_ref, s):
         N = self.N
@@ -38,21 +39,22 @@ class Mpc:
                       [0, 0]])
         AB = np.vstack((np.hstack((A, B)), np.zeros((n_u, n_x+n_u))))
         M = expm(AB*t)
-        # M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
         Ad = M[0:n_x, 0:n_x]
         Bd = M[0:n_x, n_x:n_x+n_u]
 
         Q = np.eye(n_x)  # TODO: play around with this
         Q[2, 2] *= 0.1
         Q[3, 3] *= 0.1
-        R = np.eye(n_u)  # TODO: play around with this
+        Q[4, 4] *= 0
+        R = np.eye(n_u)*0.0  # TODO: play around with this
         cost = 0
         constr = []
-
+        U_ref = np.array([0, m * self.g])
         # --- calculate cost & constraints --- #
         for k in range(0, N):
-            kf = 10 if k == N - 1 else 1  # terminal cost
-            cost += cp.quad_form(X[:, k+1] - X_ref, Q * kf) + cp.quad_form(U[:, k], R)
+            kf = 3 if k == N - 1 else 1  # terminal cost
+            # kuf = 0 if k == N - 1 else 1  # terminal cost
+            cost += cp.quad_form(X[:, k+1] - X_ref, Q * kf) + cp.quad_form(U[:, k] - U_ref , R)
             fx = U[0, k]
             fz = U[1, k]
             if ((k + s) % 2) == 0:  # even
