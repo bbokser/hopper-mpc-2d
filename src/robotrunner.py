@@ -9,6 +9,7 @@ import mpc_cvx
 import numpy as np
 import copy
 from scipy.linalg import expm
+import itertools
 
 np.set_printoptions(suppress=True, linewidth=np.nan)
 
@@ -16,39 +17,43 @@ np.set_printoptions(suppress=True, linewidth=np.nan)
 class Runner:
     def __init__(self, dt=1e-3):
         self.dt = dt
-        self.total_run = 20000
+        self.total_run = 10000
         self.tol = 1e-3  # desired mpc tolerance
         self.hconst = 0.3
-
+        self.n_x = 5  # number of states
+        self.n_u = 2  # number of controls
         self.m = 6  # mass of the robot
-        N = 10  # mpc horizon length
+        self.N = 4  # mpc horizon length
         mu = 0.3  # coeff of friction
         self.g = 9.81  # gravitational acceleration, m/s2
         self.t_p = 1  # gait period, seconds
         self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
         # for now, mpc sampling time is equal to gait period
         self.mpc_t = copy.copy(self.t_p*self.phi_switch)  # mpc sampling time
-        self.mpc = mpc_cvx.Mpc(t=self.mpc_t, N=N, m=self.m, mu=mu, g=self.g)
+        self.mpc = mpc_cvx.Mpc(t=self.mpc_t, N=self.N, m=self.m, mu=mu)
 
         self.sh = 1  # estimated contact state
 
         self.pos_ref = np.array([1, 1])  # desired body position in world coords
         self.vel_ref = np.array([0, 0])  # desired body velocity in world coords
-        self.X_ref = np.hstack([self.pos_ref, self.vel_ref]).T  # desired state
+        self.X_ref = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired state
 
     def run(self):
         total = self.total_run + 1  # number of timesteps to plot
         t = 0  # time
         t0 = t  # starting time
 
-        mpc_factor = self.mpc_t/ self.dt  # repeat mpc every x seconds
+        mpc_factor = self.mpc_t / self.dt  # repeat mpc every x seconds
         mpc_counter = mpc_factor
         force_f = None
 
-        X_traj = np.zeros((total, 4))
-        f_hist = np.zeros((total, 2))
+        X_traj = np.zeros((total, self.n_x))
+        f_hist = np.zeros((total, self.n_u))
+        s_hist = np.zeros((total, 2))
 
-        X_traj[0, :] = np.array([0, 1, 0, 0])  # initial conditions
+        X_traj[0, :] = np.array([0, 0, 0, 0, self.g])  # initial conditions
+
+        sh = 0
 
         for k in range(0, self.total_run):
             t = t + self.dt
@@ -58,40 +63,71 @@ class Runner:
             if mpc_counter == mpc_factor:  # check if it's time to restart the mpc
                 mpc_counter = 0  # restart the mpc counter
                 # if np.linalg.norm(X_traj[k, :] - self.X_ref) > self.tol:  # then check if the error is high enough
-                force_f = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_ref)[:, 0]  # take first timestep only
+                force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_ref, s=s)  # take first timestep only
 
             mpc_counter += 1
 
-            f_hist[k, :] = force_f # *s
+            s_hist[k, :] = [s, sh]
+            f_hist[k, :] = force_f[:, 0]
+            '''
+            # Open loop traj opt
+            # make sure self.total_run = 5000 and self.N = 10
+            if k == 0:
+                j = 500 # int(self.total_run/self.N)
+                print("j = ", j)
+                for i in range(0, self.N):
+                    f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[:, i], j))
+            '''
             # X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
             X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
 
         print(X_traj[-1, :])
-        print(f_hist[-1, :])
-        plots.fplot(total, p_hist=X_traj[:, 0:2], f_hist=f_hist)
-        plots.posplot(p_ref=self.X_ref[0:2], p_hist=X_traj[:, 0:2])
+        print(f_hist[9263, :])
+        plots.fplot(total, p_hist=X_traj[:, 0:2], f_hist=f_hist, s_hist=s_hist)
+        plots.posplot3d(p_ref=self.X_ref[0:2], p_hist=X_traj[:, 0:2], total=total)
 
         return None
 
     def dynamics_ct(self, X, U):
         # CT dynamics X -> dX
-        A = np.vstack((np.hstack((np.zeros((2, 2)), np.eye(2))), np.zeros((2, 4))))
-        B = np.vstack((np.zeros((2, 2)), np.eye(2) / self.m))
-        G = np.array([0, 0, 0, -self.g]).T
-        X_next = A @ X + B @ U + G
+        m = self.m
+        A = np.array([[0, 0, 1, 0, 0],
+                      [0, 0, 0, 1, 0],
+                      [0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, -1],
+                      [0, 0, 0, 0, 0]])
+        B = np.array([[0, 0],
+                      [0, 0],
+                      [1 / m, 0],
+                      [0, 1 / m],
+                      [0, 0]])
+        # G = np.array([0, 0, 0, 0, -self.g]).T
+        X_next = A @ X + B @ U
         return X_next
 
     def dynamics_dt(self, X, U):
-        # DT dynamics X -> dX
+        m = self.m
         t = self.dt
-        A = np.vstack((np.hstack((np.zeros((2, 2)), np.eye(2))), np.zeros((2, 4))))
-        B = np.vstack((np.zeros((2, 2)), np.eye(2) / self.m))
-        G = np.array([0, 0, 0, -self.g]).T
-        AB = np.vstack((np.hstack((A, B)), np.zeros((2, 6))))
+        n_x = self.n_x  # number of states
+        n_u = self.n_u  # number of controls
+        A = np.array([[0, 0, 1, 0, 0],
+                      [0, 0, 0, 1, 0],
+                      [0, 0, 0, 0, 0],
+                      [0, 0, 0, 0, -1],
+                      [0, 0, 0, 0, 0]])
+        B = np.array([[0, 0],
+                      [0, 0],
+                      [1 / m, 0],
+                      [0, 1 / m],
+                      [0, 0]])
+        # B = np.vstack((np.zeros((2, 2)), np.eye(2) / m))
+        # G = np.array([0, 0, 0, -g]).T
+        AB = np.vstack((np.hstack((A, B)), np.zeros((n_u, n_x + n_u))))
         M = expm(AB * t)
-        Ad = M[0:4, 0:4]
-        Bd = M[0:4, 4:6]
-        X_next = Ad @ X + Bd @ U + G
+        # M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
+        Ad = M[0:n_x, 0:n_x]
+        Bd = M[0:n_x, n_x:n_x + n_u]
+        X_next = Ad @ X + Bd @ U
         return X_next
 
     def rk4(self, xk, uk):
