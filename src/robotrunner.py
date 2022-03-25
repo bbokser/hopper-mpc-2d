@@ -39,7 +39,6 @@ class Runner:
         self.pos_ref = np.array([1, 1])  # desired body position in world coords
         self.vel_ref = np.array([0, 0])  # desired body velocity in world coords
         self.X_ref = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired state
-        self.closed_loop = True
 
     def run(self):
         total = self.total_run + 1  # number of timesteps to plot
@@ -72,14 +71,12 @@ class Runner:
 
             s_hist[k, :] = [s, sh]
 
-            if self.closed_loop:
+            if self.ctrl == 'mpc':
                 f_hist[k, :] = force_f[:, 0]
 
-            else:
-                # Open loop traj opt
-                # make sure self.total_run = 5000 and self.N = 10
+            else:  # Open loop traj opt
                 if k == 0:
-                    j = 500 # int(self.total_run/self.N)
+                    j = int(self.total_run/self.N)
                     print("j = ", j)
                     for i in range(0, self.N):
                         f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[:, i], j))
@@ -87,8 +84,8 @@ class Runner:
             X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
             # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
 
-        print(X_traj[-1, :])
-        print(f_hist[4500, :])
+        # print(X_traj[-1, :])
+        # print(f_hist[4500, :])
         plots.fplot(total, p_hist=X_traj[:, 0:2], f_hist=f_hist, s_hist=s_hist)
         plots.posplot3d(p_ref=self.X_ref[0:2], p_hist=X_traj[:, 0:2], total=total)
 
@@ -107,7 +104,6 @@ class Runner:
                       [1 / m, 0],
                       [0, 1 / m],
                       [0, 0]])
-        # G = np.array([0, 0, 0, 0, -self.g]).T
         X_next = A @ X + B @ U
         return X_next
 
@@ -126,11 +122,8 @@ class Runner:
                       [1 / m, 0],
                       [0, 1 / m],
                       [0, 0]])
-        # B = np.vstack((np.zeros((2, 2)), np.eye(2) / m))
-        # G = np.array([0, 0, 0, -g]).T
         AB = np.vstack((np.hstack((A, B)), np.zeros((n_u, n_x + n_u))))
         M = expm(AB * t)
-        # M = AB @ AB * (1 + t ** 2) / 2 + AB * t + np.eye(np.shape(AB)[0])
         Ad = M[0:n_x, 0:n_x]
         Bd = M[0:n_x, n_x:n_x + n_u]
         X_next = Ad @ X + Bd @ U
