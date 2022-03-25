@@ -1,4 +1,4 @@
-# REx Hopper
+# hopper-mpc-simple
 
 ## Table of Contents
 
