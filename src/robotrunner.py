@@ -15,7 +15,9 @@ np.set_printoptions(suppress=True, linewidth=np.nan)
 
 
 class Runner:
-    def __init__(self, dt=1e-3):
+    def __init__(self, dims='2d', ctrl='mpc', dt=1e-3):
+        self.dims = dims
+        self.ctrl = ctrl
         self.dt = dt
         self.total_run = 10000
         self.tol = 1e-3  # desired mpc tolerance
