@@ -110,8 +110,8 @@ class Runner:
                     for i in range(0, self.N):
                         f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[:, i], j))
 
-            # X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
-            X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
+            X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
+            # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
 
         # print(X_traj[-1, :])
         # print(f_hist[4500, :])
