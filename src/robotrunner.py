@@ -24,6 +24,8 @@ class Runner:
         self.hconst = 0.3
         self.m = 6  # mass of the robot
         self.N = 10  # mpc horizon length
+        self.g = 9.81  # gravitational acceleration, m/s2
+
         if dims == 2:
             self.n_x = 5  # number of states
             self.n_u = 2  # number of controls
@@ -39,6 +41,15 @@ class Runner:
                                [0, 0]])
             self.pos_ref = np.array([1, 1])  # desired body position in world coords
             self.vel_ref = np.array([0, 0])  # desired body velocity in world coords
+            X_0 = np.zeros(self.n_x)
+            X_0[-1] = self.g  # initial conditions
+            X_f = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired final state
+            # generate reference trajectory
+            t_ref = 3000  # time given to get to target
+            X_ref = np.linspace(start=X_0, stop=X_f, num=t_ref)  # interpolate positions
+            X_ref[:-1, 2] = [(X_ref[i + 1, 0] - X_ref[i, 0]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            X_ref[:-1, 3] = [(X_ref[i + 1, 1] - X_ref[i, 1]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            self.X_ref = np.vstack((X_ref, list(itertools.repeat(X_ref[-1, :], self.total_run - t_ref))))
         elif dims == 3:
             self.n_x = 7  # number of states
             self.n_u = 3  # number of controls
@@ -58,17 +69,24 @@ class Runner:
                                [0, 0, 0]])
             self.pos_ref = np.array([1, 1, 1])  # desired body position in world coords
             self.vel_ref = np.array([0, 0, 0])  # desired body velocity in world coords
+            X_0 = np.zeros(self.n_x)
+            X_0[-1] = self.g  # initial conditions
+            X_f = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired final state
+            # generate reference trajectory
+            t_ref = 3000  # time given to get to target
+            X_ref = np.linspace(start=X_0, stop=X_f, num=t_ref)  # interpolate positions
+            X_ref[:-1, 3] = [(X_ref[i + 1, 0] - X_ref[i, 0]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            X_ref[:-1, 4] = [(X_ref[i + 1, 1] - X_ref[i, 1]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            X_ref[:-1, 5] = [(X_ref[i + 1, 2] - X_ref[i, 2]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            self.X_ref = np.vstack((X_ref, list(itertools.repeat(X_ref[-1, :], self.total_run - t_ref))))
+
         mu = 0.3  # coeff of friction
-        self.g = 9.81  # gravitational acceleration, m/s2
         self.t_p = 1  # gait period, seconds
         self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
         # for now, mpc sampling time is equal to gait period
         self.mpc_t = copy.copy(self.t_p*self.phi_switch)  # mpc sampling time
         self.mpc = mpc_cvx.Mpc(t=self.mpc_t, A=self.A, B=self.B, N=self.N, m=self.m, g=self.g, mu=mu)
-
         self.sh = 1  # estimated contact state
-
-        self.X_ref = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired state
 
     def run(self):
         total = self.total_run + 1  # number of timesteps to plot
@@ -78,13 +96,10 @@ class Runner:
         mpc_factor = self.mpc_t / self.dt  # repeat mpc every x seconds
         mpc_counter = mpc_factor
         force_f = None
-
         X_traj = np.zeros((total, self.n_x))
+        X_traj[0, -1] = self.g  # initial conditions
         f_hist = np.zeros((total, self.n_u))
         s_hist = np.zeros((total, 2))
-
-        X_traj[0, -1] = self.g  # initial conditions
-
         sh = 0
 
         for k in range(0, self.total_run):
@@ -92,31 +107,30 @@ class Runner:
 
             s = self.gait_scheduler(t, t0)
 
-            if mpc_counter == mpc_factor:  # check if it's time to restart the mpc
-                mpc_counter = 0  # restart the mpc counter
-                # if np.linalg.norm(X_traj[k, :] - self.X_ref) > self.tol:  # then check if the error is high enough
-                force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_ref, s=s)  # take first timestep only
-
-            mpc_counter += 1
-
-            s_hist[k, :] = [s, sh]
-
             if self.ctrl == 'mpc':
-                f_hist[k, :] = force_f[:, 0]
+                if mpc_counter == mpc_factor:  # check if it's time to restart the mpc
+                    mpc_counter = 0  # restart the mpc counter
+                    # if np.linalg.norm(X_traj[k, :] - self.X_ref) > self.tol:  # then check if the error is high enough
+                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_ref[k, :], s=s)
+
+                mpc_counter += 1
+                f_hist[k, :] = force_f[:, 0]  # take first timestep
 
             else:  # Open loop traj opt
                 if k == 0:
+                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_ref[-1, :], s=s)
                     j = int(self.total_run/self.N)
                     for i in range(0, self.N):
                         f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[:, i], j))
 
+            s_hist[k, :] = [s, sh]
             X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
             # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
 
         # print(X_traj[-1, :])
         # print(f_hist[4500, :])
         plots.fplot(total, p_hist=X_traj[:, 0:self.n_u], f_hist=f_hist, s_hist=s_hist, dims=self.dims)
-        plots.posplot(p_ref=self.X_ref[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
+        plots.posplot(p_ref=self.X_ref[-1, 0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
         # plots.posplot_t(p_ref=self.X_ref[0:self.n_u], p_hist=X_traj[:, 0:2], total=total)
 
         return None
