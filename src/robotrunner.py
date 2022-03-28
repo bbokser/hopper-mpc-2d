@@ -7,7 +7,7 @@ import mpc_cvx
 # import time
 # import sys
 import numpy as np
-import copy
+# import copy
 from scipy.linalg import expm
 import itertools
 
@@ -25,7 +25,11 @@ class Runner:
         self.m = 6  # mass of the robot
         self.N = 10  # mpc horizon length
         self.g = 9.81  # gravitational acceleration, m/s2
-
+        self.t_p = 1  # gait period, seconds
+        self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
+        # for now, mpc sampling time is equal to gait period
+        self.mpc_t = self.t_p * self.phi_switch  # mpc sampling time
+        self.N_time = self.N*self.mpc_t  # mpc horizon time
         if dims == 2:
             self.n_x = 5  # number of states
             self.n_u = 2  # number of controls
@@ -41,15 +45,7 @@ class Runner:
                                [0, 0]])
             self.pos_ref = np.array([1, 1])  # desired body position in world coords
             self.vel_ref = np.array([0, 0])  # desired body velocity in world coords
-            X_0 = np.zeros(self.n_x)
-            X_0[-1] = self.g  # initial conditions
-            X_f = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired final state
-            # generate reference trajectory
-            t_ref = 3000  # time given to get to target
-            X_ref = np.linspace(start=X_0, stop=X_f, num=t_ref)  # interpolate positions
-            X_ref[:-1, 2] = [(X_ref[i + 1, 0] - X_ref[i, 0]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
-            X_ref[:-1, 3] = [(X_ref[i + 1, 1] - X_ref[i, 1]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
-            self.X_ref = np.vstack((X_ref, list(itertools.repeat(X_ref[-1, :], self.total_run - t_ref))))
+
         elif dims == 3:
             self.n_x = 7  # number of states
             self.n_u = 3  # number of controls
@@ -69,22 +65,12 @@ class Runner:
                                [0, 0, 0]])
             self.pos_ref = np.array([1, 1, 1])  # desired body position in world coords
             self.vel_ref = np.array([0, 0, 0])  # desired body velocity in world coords
-            X_0 = np.zeros(self.n_x)
-            X_0[-1] = self.g  # initial conditions
-            X_f = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired final state
-            # generate reference trajectory
-            t_ref = 3000  # time given to get to target
-            X_ref = np.linspace(start=X_0, stop=X_f, num=t_ref)  # interpolate positions
-            X_ref[:-1, 3] = [(X_ref[i + 1, 0] - X_ref[i, 0]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
-            X_ref[:-1, 4] = [(X_ref[i + 1, 1] - X_ref[i, 1]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
-            X_ref[:-1, 5] = [(X_ref[i + 1, 2] - X_ref[i, 2]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
-            self.X_ref = np.vstack((X_ref, list(itertools.repeat(X_ref[-1, :], self.total_run - t_ref))))
 
+        self.X_0 = np.zeros(self.n_x)
+        self.X_0[-1] = self.g  # initial conditions
+        self.X_f = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired final state
         mu = 0.3  # coeff of friction
-        self.t_p = 1  # gait period, seconds
-        self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
-        # for now, mpc sampling time is equal to gait period
-        self.mpc_t = copy.copy(self.t_p*self.phi_switch)  # mpc sampling time
+
         self.mpc = mpc_cvx.Mpc(t=self.mpc_t, A=self.A, B=self.B, N=self.N, m=self.m, g=self.g, mu=mu)
         self.sh = 1  # estimated contact state
 
@@ -106,19 +92,19 @@ class Runner:
             t = t + self.dt
 
             s = self.gait_scheduler(t, t0)
-
+            X_ref = self.path_plan(X_in=X_traj[k, :], k=k)
             if self.ctrl == 'mpc':
                 if mpc_counter == mpc_factor:  # check if it's time to restart the mpc
                     mpc_counter = 0  # restart the mpc counter
-                    # if np.linalg.norm(X_traj[k, :] - self.X_ref) > self.tol:  # then check if the error is high enough
-                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_ref[k, :], s=s)
+                    X_refN = X_ref[k::int((self.total_run - k) / self.N)]
+                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
 
                 mpc_counter += 1
                 f_hist[k, :] = force_f[:, 0]  # take first timestep
 
             else:  # Open loop traj opt
                 if k == 0:
-                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_ref[-1, :], s=s)
+                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=self.X_f, s=s)
                     j = int(self.total_run/self.N)
                     for i in range(0, self.N):
                         f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[:, i], j))
@@ -130,7 +116,7 @@ class Runner:
         # print(X_traj[-1, :])
         # print(f_hist[4500, :])
         plots.fplot(total, p_hist=X_traj[:, 0:self.n_u], f_hist=f_hist, s_hist=s_hist, dims=self.dims)
-        plots.posplot(p_ref=self.X_ref[-1, 0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
+        plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
         # plots.posplot_t(p_ref=self.X_ref[0:self.n_u], p_hist=X_traj[:, 0:2], total=total)
 
         return None
@@ -172,4 +158,21 @@ class Runner:
         else:
             s = 1  # scheduled stance
         return s
+
+    def path_plan(self, X_in, k):
+        # Path planner--generate reference trajectory
+        dt = self.dt
+        # timesteps given to get to target, either remaining time or based on distance (whichever is smaller)
+        t_ref = int(np.minimum(self.total_run - k, np.linalg.norm(self.X_f - X_in)*2000))
+        X_ref = np.linspace(start=X_in, stop=self.X_f, num=t_ref)  # interpolate positions
+        # interpolate velocities
+        if self.dims == 2:
+            X_ref[:-1, 2] = [(X_ref[i + 1, 0] - X_ref[i, 0]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            X_ref[:-1, 3] = [(X_ref[i + 1, 1] - X_ref[i, 1]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+        elif self.dims == 3:
+            X_ref[:-1, 3] = [(X_ref[i + 1, 0] - X_ref[i, 0]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            X_ref[:-1, 4] = [(X_ref[i + 1, 1] - X_ref[i, 1]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+            X_ref[:-1, 5] = [(X_ref[i + 1, 2] - X_ref[i, 2]) / dt for i in range(0, np.shape(X_ref)[0] - 1)]
+        X_ref = np.vstack((X_ref, list(itertools.repeat(X_ref[-1, :], self.total_run - t_ref))))
+        return X_ref
 

@@ -49,7 +49,7 @@ class Mpc:
             for k in range(0, N):
                 kf = 3 if k == N - 1 else 1  # terminal cost
                 kuf = 0 if k == N - 1 else 1  # terminal cost
-                cost += cp.quad_form(X[:, k+1] - X_ref, Q * kf) + cp.quad_form(U[:, k] - U_ref, R * kuf)
+                cost += cp.quad_form(X[:, k+1] - X_ref[k, :], Q * kf) + cp.quad_form(U[:, k] - U_ref, R * kuf)
                 fx = U[0, k]
                 fz = U[1, k]
                 if ((k + s) % 2) == 0:  # even
@@ -65,7 +65,7 @@ class Mpc:
             for k in range(0, N):
                 kf = 10 if k == N - 1 else 1  # terminal cost
                 kuf = 0 if k == N - 1 else 1  # terminal cost
-                cost += cp.quad_form(X[:, k+1] - X_ref, Q * kf) + cp.quad_form(U[:, k] - U_ref, R * kuf)
+                cost += cp.quad_form(X[:, k+1] - X_ref[k, :], Q * kf) + cp.quad_form(U[:, k] - U_ref, R * kuf)
                 fx = U[0, k]
                 fy = U[1, k]
                 fz = U[2, k]
@@ -81,7 +81,7 @@ class Mpc:
                                0 >= fy - mu * fz,
                                0 >= -fy - mu * fz,
                                0 <= fz]
-        constr += [X[:, 0] == X_in, X[:, N] == X_ref]  # initial and final condition
+        constr += [X[:, 0] == X_in, X[:, N] == X_ref[-1, :]]  # initial and final condition
         # constr += [X[:, 0] == X_in]  # initial condition
         # --- set up solver --- #
         problem = cp.Problem(cp.Minimize(cost), constr)
