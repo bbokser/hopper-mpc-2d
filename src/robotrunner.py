@@ -63,7 +63,7 @@ class Runner:
                                [0, 1 / self.m, 0],
                                [0, 0, 1 / self.m],
                                [0, 0, 0]])
-            self.pos_ref = np.array([1, 1, 1])  # desired body position in world coords
+            self.pos_ref = np.array([2, 2, 0.5])  # desired body position in world coords
             self.vel_ref = np.array([0, 0, 0])  # desired body velocity in world coords
 
         self.X_0 = np.zeros(self.n_x)

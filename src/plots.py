@@ -5,6 +5,9 @@ Copyright (C) 2021-2022 Benjamin Bokser
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
+plt.style.use(['science', 'no-latex'])
+plt.rcParams['lines.linewidth'] = 2
+import matplotlib.ticker as plticker
 import itertools
 
 
@@ -62,13 +65,21 @@ def posplot(p_ref, p_hist, dims):
 
     elif dims == 3:
         ax = plt.axes(projection='3d')
-        ax.plot(p_hist[:, 0], p_hist[:, 1], p_hist[:, 2], color='blue', label='body position')
-        ax.set_title('Body XYZ Position')
-        ax.set_xlabel("x (m)")
-        ax.set_ylabel("y (m)")
-        ax.set_zlabel("z (m)")
-        ax.scatter(0, 0, 0, color='green', label='starting position')
-        ax.scatter(p_ref[0], p_ref[1], p_ref[2], color='orange', label='position setpoint')
+        ax.plot(p_hist[:, 0], p_hist[:, 1], p_hist[:, 2], color='blue', label='Body Position')
+        ax.set_title('Body Position')
+        ax.set_xlabel("X (m)")
+        ax.set_ylabel("Y (m)")
+        ax.set_zlabel("Z (m)")
+        ax.scatter(0, 0, 0, color='green', label='Starting Position')
+        ax.scatter(p_ref[0], p_ref[1], p_ref[2], color='orange', label='Target Position')
+        intervals = 2
+        loc = plticker.MultipleLocator(base=intervals)
+        ax.xaxis.set_minor_locator(loc)
+        ax.yaxis.set_minor_locator(loc)
+        ax.zaxis.set_minor_locator(loc)
+        # Add the grid
+        ax.grid(which='minor', axis='both', linestyle='-')
+
         ax.legend()
 
     plt.show()
