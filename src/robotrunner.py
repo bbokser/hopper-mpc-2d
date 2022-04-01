@@ -25,7 +25,7 @@ class Runner:
         self.m = 6  # mass of the robot
         self.N = 10  # mpc horizon length
         self.g = 9.81  # gravitational acceleration, m/s2
-        self.t_p = 1  # gait period, seconds
+        self.t_p = 2  # gait period, seconds
         self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
         # for now, mpc sampling time is equal to gait period
         self.mpc_t = self.t_p * self.phi_switch  # mpc sampling time
@@ -69,7 +69,7 @@ class Runner:
         self.X_0 = np.zeros(self.n_x)
         self.X_0[-1] = self.g  # initial conditions
         self.X_f = np.hstack([self.pos_ref, self.vel_ref, self.g]).T  # desired final state
-        mu = 0.3  # coeff of friction
+        mu = 0.8  # coeff of friction
         self.mpc = mpc_cvx.Mpc(t=self.mpc_t, A=self.A, B=self.B, N=self.N, m=self.m, g=self.g, mu=mu)
         self.mpc_factor = self.mpc_t / self.dt  # repeat mpc every x seconds
 
@@ -82,6 +82,7 @@ class Runner:
         mpc_counter = copy.copy(mpc_factor)
         force_f = None
         X_traj = np.zeros((total, self.n_x))
+        X_traj[0, 2] = 0.7  # initial conditions
         X_traj[0, -1] = self.g  # initial conditions
         f_hist = np.zeros((total, self.n_u))
         s_hist = np.zeros((total, 2))

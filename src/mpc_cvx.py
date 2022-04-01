@@ -66,6 +66,7 @@ class Mpc:
                 kf = 10 if k == N - 1 else 1  # terminal cost
                 kuf = 0 if k == N - 1 else 1  # terminal cost
                 cost += cp.quad_form(X[:, k+1] - X_ref[k, :], Q * kf) + cp.quad_form(U[:, k] - U_ref, R * kuf)
+                z = X[2, k]
                 fx = U[0, k]
                 fy = U[1, k]
                 fz = U[2, k]
@@ -73,14 +74,15 @@ class Mpc:
                     constr += [X[:, k + 1] == Ad @ X[:, k] + Bd @ U[:, k],
                                0 == fx,  # fx
                                0 == fy,  # fy
-                               0 == fz]  # fz
+                               0 == fz,
+                               z >= 0]  # fz
                 else:  # odd
                     constr += [X[:, k + 1] == Ad @ X[:, k] + Bd @ U[:, k],
                                0 >= fx - mu * fz,
                                0 >= -fx - mu * fz,
                                0 >= fy - mu * fz,
                                0 >= -fy - mu * fz,
-                               0 <= fz]
+                               z >= 0]
         constr += [X[:, 0] == X_in, X[:, N] == X_ref[-1, :]]  # initial and final condition
         # constr += [X[:, 0] == X_in]  # initial condition
         # --- set up solver --- #

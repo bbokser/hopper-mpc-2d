@@ -4,11 +4,12 @@ Copyright (C) 2021-2022 Benjamin Bokser
 
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits import mplot3d
+# from mpl_toolkits import mplot3d
 plt.style.use(['science', 'no-latex'])
 plt.rcParams['lines.linewidth'] = 2
 import matplotlib.ticker as plticker
 import itertools
+plt.rcParams['font.size'] = 16
 
 
 def fplot(total, p_hist, f_hist, s_hist, dims):
@@ -70,8 +71,9 @@ def posplot(p_ref, p_hist, dims):
         ax.set_xlabel("X (m)")
         ax.set_ylabel("Y (m)")
         ax.set_zlabel("Z (m)")
-        ax.scatter(0, 0, 0, color='green', label='Starting Position')
-        ax.scatter(p_ref[0], p_ref[1], p_ref[2], color='orange', label='Target Position')
+        ax.scatter(0, 0, 0, color='green', marker="x", s=200, label='Starting Position')
+        ax.scatter(p_ref[0], p_ref[1], 0, marker="x", s=200, color='orange', label='Target Position')
+        ax.legend()
         intervals = 2
         loc = plticker.MultipleLocator(base=intervals)
         ax.xaxis.set_minor_locator(loc)
@@ -79,8 +81,9 @@ def posplot(p_ref, p_hist, dims):
         ax.zaxis.set_minor_locator(loc)
         # Add the grid
         ax.grid(which='minor', axis='both', linestyle='-')
-
-        ax.legend()
+        ax.xaxis.labelpad = 30
+        ax.yaxis.labelpad = 30
+        ax.zaxis.labelpad = 30
 
     plt.show()
 
