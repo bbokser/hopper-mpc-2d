@@ -60,7 +60,7 @@ def posplot(p_ref, p_hist, dims):
         plt.title('Body XZ Position')
         plt.ylabel("z (m)")
         plt.xlabel("x (m)")
-        plt.scatter(0, 0, color='green', marker="x", s=100, label='starting position')
+        plt.scatter(p_hist[0, 0], p_hist[0, 1], color='green', marker="x", s=100, label='starting position')
         plt.scatter(p_ref[0], p_ref[1], color='orange', marker="x", s=100, label='position setpoint')
         plt.legend(loc="upper left")
 
@@ -71,8 +71,8 @@ def posplot(p_ref, p_hist, dims):
         ax.set_xlabel("X (m)")
         ax.set_ylabel("Y (m)")
         ax.set_zlabel("Z (m)")
-        ax.scatter(0, 0, 0, color='green', marker="x", s=200, label='Starting Position')
-        ax.scatter(p_ref[0], p_ref[1], 0, marker="x", s=200, color='orange', label='Target Position')
+        ax.scatter(p_hist[0, 0], p_hist[0, 1], p_hist[0, 2], color='green', marker="x", s=200, label='Starting Position')
+        ax.scatter(p_ref[0], p_ref[1], p_ref[2], marker="x", s=200, color='orange', label='Target Position')
         ax.legend()
         intervals = 2
         loc = plticker.MultipleLocator(base=intervals)
