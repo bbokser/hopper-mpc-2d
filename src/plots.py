@@ -53,7 +53,7 @@ def fplot(total, p_hist, f_hist, s_hist, dims):
     plt.show()
 
 
-def posplot(p_ref, p_hist, dims):
+def posplot(p_ref, p_hist, pf_hist, dims):
 
     if dims == 2:
         plt.plot(p_hist[:, 0], p_hist[:, 1], color='blue', label='body position')
@@ -66,13 +66,14 @@ def posplot(p_ref, p_hist, dims):
 
     elif dims == 3:
         ax = plt.axes(projection='3d')
-        ax.plot(p_hist[:, 0], p_hist[:, 1], p_hist[:, 2], color='blue', label='Body Position')
+        ax.plot(p_hist[:, 0], p_hist[:, 1], p_hist[:, 2], color='red', label='Body Position')
         ax.set_title('Body Position')
         ax.set_xlabel("X (m)")
         ax.set_ylabel("Y (m)")
         ax.set_zlabel("Z (m)")
-        ax.scatter(p_hist[0, 0], p_hist[0, 1], p_hist[0, 2], color='green', marker="x", s=200, label='Starting Position')
-        ax.scatter(p_ref[0], p_ref[1], p_ref[2], marker="x", s=200, color='orange', label='Target Position')
+        ax.scatter(*p_hist[0, :], color='green', marker="x", s=200, label='Starting Position')
+        ax.scatter(pf_hist[:, 0], pf_hist[:, 1], pf_hist[:, 2], marker="x", s=200, color='blue', label='Footstep Positions')
+        ax.scatter(*p_ref, marker="x", s=200, color='orange', label='Target Position')
         ax.legend()
         intervals = 2
         loc = plticker.MultipleLocator(base=intervals)

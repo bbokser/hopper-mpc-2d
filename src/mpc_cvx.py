@@ -94,10 +94,11 @@ class Mpc:
         constr += [X[0, :] == X_in, X[N, :] == X_ref[-1, :]]  # initial and final condition
         # --- set up solver --- #
         problem = cp.Problem(cp.Minimize(cost), constr)
-        problem.solve(solver=cp.CVXOPT)  #, verbose=True)
+        problem.solve(solver=cp.ECOS)  #, verbose=True)
         u = U.value
+        x = X.value
         if u is None:
             raise Exception("\n *** QP FAILED *** \n")
         # print(u)
         # breakpoint()
-        return u, (s % 2)
+        return u, x, (s % 2)

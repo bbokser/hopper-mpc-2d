@@ -10,8 +10,18 @@ import numpy as np
 import copy
 from scipy.linalg import expm
 import itertools
-
+from scipy.signal import argrelextrema
 np.set_printoptions(suppress=True, linewidth=np.nan)
+
+
+def projection(p0, v):
+    # find point p projected onto ground plane from point p0 by vector v
+    z = 0
+    t = (z - p0[2]) / v[2]
+    x = p0[0] + t * v[0]
+    y = p0[1] + t * v[1]
+    p = np.array([x, y, z])
+    return p
 
 
 class Runner:
@@ -87,7 +97,9 @@ class Runner:
         f_hist = np.zeros((total, self.n_u))
         s_hist = np.zeros((total, 2))
         sh = 0
-
+        U_pred = np.zeros((self.N, self.n_u))
+        X_pred = np.zeros((self.N, self.n_x))
+        pf_ref = np.zeros(self.n_u)
         for k in range(0, self.total_run):
             t = t + self.dt
 
@@ -98,9 +110,13 @@ class Runner:
                     mpc_counter = 0  # restart the mpc counter
                     X_ref = self.path_plan(X_in=X_traj[k, :])
                     X_refN = X_ref[::int(self.mpc_factor)]
-                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
+                    U_pred, X_pred, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
+                    k_pred = argrelextrema(X_pred[:, 2], np.less)[0][0]  # index of next local minimum of body z pos
+                    p_pred = X_pred[k_pred, 0:3]  # next predicted body position over next footstep
+                    f_pred = U_pred[k_pred, :]  # next predicted foot force vector
+                    pf_ref = np.vstack((pf_ref, projection(p_pred, f_pred)))
                 mpc_counter += 1
-                f_hist[k, :] = force_f[0, :]  # take first timestep
+                f_hist[k, :] = U_pred[0, :]  # take first timestep
 
             else:  # Open loop traj opt, this will fail if total != mpc_factor
                 if int(total/self.N) != mpc_factor:
@@ -121,7 +137,7 @@ class Runner:
         # print(X_traj[-1, :])
         # print(f_hist[4500, :])
         plots.fplot(total, p_hist=X_traj[:, 0:self.n_u], f_hist=f_hist, s_hist=s_hist, dims=self.dims)
-        plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
+        plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], pf_hist=pf_ref, dims=self.dims)
         # plots.posplot_t(p_ref=self.X_ref[0:self.n_u], p_hist=X_traj[:, 0:2], total=total)
 
         return None
