@@ -81,7 +81,7 @@ class Runner:
 
         mu = 0.3  # coeff of friction
         self.mpc = mpc_cvx.Mpc(t=self.mpc_dt, A=self.A, B=self.B, N=self.N, m=self.m, g=self.g, mu=mu)
-        self.mpc_factor = self.mpc_dt / self.dt  # repeat mpc every x seconds
+        self.mpc_factor = self.mpc_dt * 2 / self.dt  # repeat mpc every x seconds
 
     def run(self):
         total = self.total_run + 1  # number of timesteps to plot
@@ -90,12 +90,10 @@ class Runner:
 
         mpc_factor = self.mpc_factor  # repeat mpc every x seconds
         mpc_counter = copy.copy(mpc_factor)
-        force_f = None
         X_traj = np.zeros((total, self.n_x))
         X_traj[0, :] = self.X_0  # initial conditions
         f_hist = np.zeros((total, self.n_u))
-        s_hist = np.zeros((total, 2))
-        sh = 0
+        s_hist = np.zeros(total)
         U_pred = np.zeros((self.N, self.n_u))
         X_pred = np.zeros((self.N, self.n_x))
         pf_ref = np.zeros(self.n_u)
@@ -112,16 +110,16 @@ class Runner:
                 if mpc_counter == mpc_factor:  # check if it's time to restart the mpc
                     mpc_counter = 0  # restart the mpc counter
                     X_ref = self.path_plan(X_in=X_traj[k, :])
-                    X_refN = X_ref[::int(self.mpc_factor)]
-                    U_pred, X_pred, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
-                    p_pred = X_pred[2, 0:3]  # next predicted body position over next footstep
+                    X_refN = X_ref[::int(self.mpc_dt / self.dt)]
+                    U_pred, X_pred = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN)
+                    p_pred = (X_pred[2, 0:3]+(X_pred[2, 0:3]+X_pred[3, 0:3])/2)/2  # next pred body pos over next ftstep
                     f_pred = U_pred[2, :]  # next predicted foot force vector
                     p_pred_hist = np.vstack((p_pred_hist, p_pred))
-                    f_pred_hist = np.vstack((f_pred_hist, f_pred/np.sqrt(np.sum(f_pred**2))))
+                    f_pred_hist = np.vstack((f_pred_hist, 0.5*f_pred/np.sqrt(np.sum(f_pred**2))))
                     pf_ref = np.vstack((pf_ref, projection(p_pred, f_pred)))
                     X_pred_hist = np.dstack((X_pred_hist, X_pred[:, 0:self.n_u]))
                 mpc_counter += 1
-                f_hist[k, :] = U_pred[0, :]  # take first timestep
+                f_hist[k, :] = U_pred[0, :]*s  # take first timestep
 
             else:  # Open loop traj opt, this will fail if total != mpc_factor
                 if int(total/self.N) != mpc_factor:
@@ -129,11 +127,11 @@ class Runner:
                 if k == 0:
                     X_ref = self.path_plan(X_in=X_traj[k, :])
                     X_refN = X_ref[::int(self.mpc_factor)]  # self.traj_N(X_ref)
-                    force_f, X_pred, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
+                    force_f, X_pred = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN)
                     for i in range(0, self.N):
                         f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[i, :], j))
 
-            s_hist[k, :] = [s, sh]
+            s_hist[k] = s
             X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
             # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :], t=self.dt)
 

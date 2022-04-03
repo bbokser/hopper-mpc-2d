@@ -28,7 +28,7 @@ def fplot(total, p_hist, f_hist, s_hist, dims):
         axs[2].plot(range(total), f_hist[:, 1], color='blue')
         axs[2].set_title('Magnitude of Z Output Force')
         axs[2].set_ylabel("Force, N")
-        axs[3].plot(range(total), s_hist[:, 0], color='blue')
+        axs[3].plot(range(total), s_hist, color='blue')
         axs[3].set_title('Scheduled Contact')
         axs[3].set_ylabel("True/False")
 
@@ -40,13 +40,13 @@ def fplot(total, p_hist, f_hist, s_hist, dims):
         axs[1].plot(range(total), f_hist[:, 0], color='blue')
         axs[1].set_title('Magnitude of X Output Force')
         axs[1].set_ylabel("Force, N")
-        axs[2].plot(range(total), s_hist[:, 1], color='blue')
+        axs[2].plot(range(total), f_hist[:, 1], color='blue')
         axs[2].set_title('Magnitude of Y Output Force')
         axs[2].set_ylabel("Force, N")
         axs[3].plot(range(total), f_hist[:, 2], color='blue')
         axs[3].set_title('Magnitude of Z Output Force')
         axs[3].set_ylabel("Force, N")
-        axs[4].plot(range(total), s_hist[:, 0], color='blue')
+        axs[4].plot(range(total), s_hist, color='blue')
         axs[4].set_title('Scheduled Contact')
         axs[4].set_ylabel("True/False")
 
@@ -108,7 +108,7 @@ def posfplot(p_ref, p_hist, p_pred_hist, f_pred_hist, pf_hist, dims):
         ax.set_zlabel("Z (m)")
         ax.scatter(*p_hist[0, :], color='green', marker="x", s=200, label='Starting Position')
         ax.quiver(p_pred_hist[:, 0], p_pred_hist[:, 1], p_pred_hist[:, 2],
-                  f_pred_hist[:, 0], f_pred_hist[:, 1], f_pred_hist[:, 2])
+                  -f_pred_hist[:, 0], -f_pred_hist[:, 1], -f_pred_hist[:, 2], label='Predicted Forces')
         ax.scatter(pf_hist[:, 0], pf_hist[:, 1], pf_hist[:, 2], marker=".", s=200, color='blue', label='Footstep Positions')
         ax.scatter(*p_ref, marker="x", s=200, color='orange', label='Target Position')
         ax.legend()
