@@ -10,7 +10,6 @@ import numpy as np
 import copy
 from scipy.linalg import expm
 import itertools
-from scipy.signal import argrelextrema
 np.set_printoptions(suppress=True, linewidth=np.nan)
 
 
@@ -29,7 +28,7 @@ class Runner:
         self.dims = dims
         self.ctrl = ctrl
         self.dt = dt
-        self.total_run = 10000
+        self.total_run = 5000
         self.tol = 1e-3  # desired mpc tolerance
         self.m = 7.5  # mass of the robot, kg
         self.N = 10  # mpc horizon length
@@ -80,7 +79,7 @@ class Runner:
             self.X_0[-1] = self.g  # initial conditions
             self.X_f = np.hstack([2, 2, 0.5, 0, 0, 0, self.g]).T  # desired final state
 
-        mu = 0.8  # coeff of friction
+        mu = 0.3  # coeff of friction
         self.mpc = mpc_cvx.Mpc(t=self.mpc_dt, A=self.A, B=self.B, N=self.N, m=self.m, g=self.g, mu=mu)
         self.mpc_factor = self.mpc_dt / self.dt  # repeat mpc every x seconds
 
@@ -100,6 +99,10 @@ class Runner:
         U_pred = np.zeros((self.N, self.n_u))
         X_pred = np.zeros((self.N, self.n_x))
         pf_ref = np.zeros(self.n_u)
+        j = int(self.mpc_factor)
+        X_pred_hist = np.zeros((self.N+1, self.n_u))
+        f_pred_hist = np.zeros((total, self.n_u))
+        p_pred_hist = np.zeros((total, self.n_u))
         for k in range(0, self.total_run):
             t = t + self.dt
 
@@ -111,10 +114,12 @@ class Runner:
                     X_ref = self.path_plan(X_in=X_traj[k, :])
                     X_refN = X_ref[::int(self.mpc_factor)]
                     U_pred, X_pred, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
-                    k_pred = argrelextrema(X_pred[:, 2], np.less)[0][0]  # index of next local minimum of body z pos
-                    p_pred = X_pred[k_pred, 0:3]  # next predicted body position over next footstep
-                    f_pred = U_pred[k_pred, :]  # next predicted foot force vector
+                    p_pred = X_pred[2, 0:3]  # next predicted body position over next footstep
+                    f_pred = U_pred[2, :]  # next predicted foot force vector
+                    p_pred_hist = np.vstack((p_pred_hist, p_pred))
+                    f_pred_hist = np.vstack((f_pred_hist, f_pred/np.sqrt(np.sum(f_pred**2))))
                     pf_ref = np.vstack((pf_ref, projection(p_pred, f_pred)))
+                    X_pred_hist = np.dstack((X_pred_hist, X_pred[:, 0:self.n_u]))
                 mpc_counter += 1
                 f_hist[k, :] = U_pred[0, :]  # take first timestep
 
@@ -124,20 +129,21 @@ class Runner:
                 if k == 0:
                     X_ref = self.path_plan(X_in=X_traj[k, :])
                     X_refN = X_ref[::int(self.mpc_factor)]  # self.traj_N(X_ref)
-                    force_f, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
-                    j = int(self.mpc_factor)
-                    # j = int(self.total_run/self.N)
+                    force_f, X_pred, sh = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN, s=s)
                     for i in range(0, self.N):
                         f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[i, :], j))
 
             s_hist[k, :] = [s, sh]
             X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
-            # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :])
+            # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :], t=self.dt)
 
         # print(X_traj[-1, :])
         # print(f_hist[4500, :])
         plots.fplot(total, p_hist=X_traj[:, 0:self.n_u], f_hist=f_hist, s_hist=s_hist, dims=self.dims)
-        plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], pf_hist=pf_ref, dims=self.dims)
+        plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
+        plots.posfplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u],
+                       p_pred_hist=p_pred_hist, f_pred_hist=f_pred_hist, pf_hist=pf_ref, dims=self.dims)
+        # plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_pred_hist[:, 0:self.n_u, 1], dims=self.dims)
         # plots.posplot_t(p_ref=self.X_ref[0:self.n_u], p_hist=X_traj[:, 0:2], total=total)
 
         return None
@@ -149,8 +155,7 @@ class Runner:
         X_next = A @ X + B @ U
         return X_next
 
-    def dynamics_dt(self, X, U):
-        t = self.dt
+    def dynamics_dt(self, X, U, t):
         n_x = self.n_x  # number of states
         n_u = self.n_u  # number of controls
         A = self.A

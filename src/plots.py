@@ -53,7 +53,7 @@ def fplot(total, p_hist, f_hist, s_hist, dims):
     plt.show()
 
 
-def posplot(p_ref, p_hist, pf_hist, dims):
+def posplot(p_ref, p_hist, dims):
 
     if dims == 2:
         plt.plot(p_hist[:, 0], p_hist[:, 1], color='blue', label='body position')
@@ -72,7 +72,44 @@ def posplot(p_ref, p_hist, pf_hist, dims):
         ax.set_ylabel("Y (m)")
         ax.set_zlabel("Z (m)")
         ax.scatter(*p_hist[0, :], color='green', marker="x", s=200, label='Starting Position')
-        ax.scatter(pf_hist[:, 0], pf_hist[:, 1], pf_hist[:, 2], marker="x", s=200, color='blue', label='Footstep Positions')
+        ax.scatter(*p_ref, marker="x", s=200, color='orange', label='Target Position')
+        ax.legend()
+        intervals = 2
+        loc = plticker.MultipleLocator(base=intervals)
+        ax.xaxis.set_minor_locator(loc)
+        ax.yaxis.set_minor_locator(loc)
+        ax.zaxis.set_minor_locator(loc)
+        # Add the grid
+        ax.grid(which='minor', axis='both', linestyle='-')
+        ax.xaxis.labelpad = 30
+        ax.yaxis.labelpad = 30
+        ax.zaxis.labelpad = 30
+
+    plt.show()
+
+
+def posfplot(p_ref, p_hist, p_pred_hist, f_pred_hist, pf_hist, dims):
+
+    if dims == 2:
+        plt.plot(p_hist[:, 0], p_hist[:, 1], color='blue', label='body position')
+        plt.title('Body XZ Position')
+        plt.ylabel("z (m)")
+        plt.xlabel("x (m)")
+        plt.scatter(p_hist[0, 0], p_hist[0, 1], color='green', marker="x", s=100, label='starting position')
+        plt.scatter(p_ref[0], p_ref[1], color='orange', marker="x", s=100, label='position setpoint')
+        plt.legend(loc="upper left")
+
+    elif dims == 3:
+        ax = plt.axes(projection='3d')
+        ax.plot(p_hist[:, 0], p_hist[:, 1], p_hist[:, 2], color='red', label='Body Position')
+        ax.set_title('Body Position')
+        ax.set_xlabel("X (m)")
+        ax.set_ylabel("Y (m)")
+        ax.set_zlabel("Z (m)")
+        ax.scatter(*p_hist[0, :], color='green', marker="x", s=200, label='Starting Position')
+        ax.quiver(p_pred_hist[:, 0], p_pred_hist[:, 1], p_pred_hist[:, 2],
+                  f_pred_hist[:, 0], f_pred_hist[:, 1], f_pred_hist[:, 2])
+        ax.scatter(pf_hist[:, 0], pf_hist[:, 1], pf_hist[:, 2], marker=".", s=200, color='blue', label='Footstep Positions')
         ax.scatter(*p_ref, marker="x", s=200, color='orange', label='Target Position')
         ax.legend()
         intervals = 2
