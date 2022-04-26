@@ -1,4 +1,4 @@
-# hopper-mpc-simple
+# hopper-mpc-point
 
 ## Table of Contents
 
@@ -9,7 +9,7 @@
 ---
 ## Intro
 
-This repository contains Python code for a simple simulation of a hopping point mass with model predictive control. The "simulator" uses RK4 integration (alternatively, you can directly use the DT system).
+This repository contains Python code for a simple simulation of a hopping point mass with model predictive control. The simulator uses RK4 integration (alternatively, you can directly use the DT system).
 
 ---
 
@@ -18,7 +18,7 @@ This repository contains Python code for a simple simulation of a hopping point 
 1. Clone this directory wherever you want.
 
 ```shell 
-git clone https://github.com/bbokser/hopper-mpc-simple.git
+git clone https://github.com/bbokser/hopper-mpc-point.git
 ```  
 
 2. Make sure both Python 3.8 and pip are installed.
@@ -33,7 +33,7 @@ python3.8 -m pip install --upgrade pip
 
 ```shell
 sudo apt-get install python3.8-venv
-cd hopper-mpc-simple/src
+cd hopper-mpc-simple
 python3.8 -m venv env
 ```
 For more information on virtual environments: https://docs.python.org/3/library/venv.html
@@ -53,7 +53,7 @@ Don't use sudo here if you can help it, because it may modify your path and inst
 Here is some example code:
 
 ```shell
-cd hopper-mpc-simple/src
+cd hopper-mpc-point/src
 source env/bin/activate
 python3.8 run.py 2 mpc
 ```
