@@ -28,7 +28,6 @@ class Runner:
         self.dims = dims
         self.ctrl = ctrl
         self.dt = dt
-        self.total_run = 5000
         self.tol = 1e-3  # desired mpc tolerance
         self.m = 7.5  # mass of the robot, kg
         self.N = 10  # mpc horizon length
@@ -37,7 +36,7 @@ class Runner:
         self.phi_switch = 0.5  # switching phase, must be between 0 and 1. Percentage of gait spent in contact.
         # for now, mpc sampling time is equal to gait period
         self.mpc_dt = self.t_p * self.phi_switch  # mpc sampling time
-        self.N_time = self.N*self.mpc_dt  # mpc horizon time
+        self.N_time = self.N * self.mpc_dt  # mpc horizon time
         if dims == 2:
             self.n_x = 5  # number of states
             self.n_u = 2  # number of controls
@@ -81,7 +80,16 @@ class Runner:
 
         mu = 0.3  # coeff of friction
         self.mpc = mpc_cvx.Mpc(t=self.mpc_dt, A=self.A, B=self.B, N=self.N, m=self.m, g=self.g, mu=mu)
-        self.mpc_factor = self.mpc_dt * 2 / self.dt  # repeat mpc every x seconds
+
+        if self.ctrl == 'openloop':
+            self.mpc_factor = self.mpc_dt / self.dt  # repeat mpc every x low level timesteps
+            self.total_run = int(self.N * self.mpc_factor)  # override runtime for open loop traj opt
+        else:
+            self.mpc_factor = 2 * self.mpc_dt / self.dt  # repeat mpc every x low level timesteps
+            self.total_run = 5000
+
+        # self.N_mpc = self.mpc_factor / self.N  # low level timesteps per mpc timestep
+        print('total_run = ', self.total_run)
 
     def run(self):
         total = self.total_run + 1  # number of timesteps to plot
@@ -96,8 +104,12 @@ class Runner:
         s_hist = np.zeros(total)
         U_pred = np.zeros((self.N, self.n_u))
         X_pred = np.zeros((self.N, self.n_x))
-        pf_ref = np.zeros(self.n_u)
+        if self.ctrl == 'openloop':
+            pf_ref = np.zeros((self.N+1, self.n_u))
+        else:
+            pf_ref = np.zeros(self.n_u)
         j = int(self.mpc_factor)
+        print('j = ', j)
         X_pred_hist = np.zeros((self.N+1, self.n_u))
         f_pred_hist = np.zeros((total, self.n_u))
         p_pred_hist = np.zeros((total, self.n_u))
@@ -112,25 +124,24 @@ class Runner:
                     X_ref = self.path_plan(X_in=X_traj[k, :])
                     X_refN = X_ref[::int(self.mpc_dt / self.dt)]
                     U_pred, X_pred = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN)
-                    p_pred = (X_pred[2, 0:3]+(X_pred[2, 0:3]+X_pred[3, 0:3])/2)/2  # next pred body pos over next ftstep
+                    # p_pred = (X_pred[2, 0:3]+(X_pred[2, 0:3]+X_pred[3, 0:3])/2)/2  # next pred body pos over next step
+                    # p_pred = (X_pred[2, 0:3] + X_pred[3, 0:3]) / 2  # next pred body pos over next ftstep
+                    p_pred = X_pred[3, 0:3]
                     f_pred = U_pred[2, :]  # next predicted foot force vector
                     p_pred_hist = np.vstack((p_pred_hist, p_pred))
                     f_pred_hist = np.vstack((f_pred_hist, 0.5*f_pred/np.sqrt(np.sum(f_pred**2))))
                     pf_ref = np.vstack((pf_ref, projection(p_pred, f_pred)))
                     X_pred_hist = np.dstack((X_pred_hist, X_pred[:, 0:self.n_u]))
                 mpc_counter += 1
-                f_hist[k, :] = U_pred[0, :]*s  # take first timestep
+                f_hist[k, :] = U_pred[0, :] * s  # take first timestep
 
             else:  # Open loop traj opt, this will fail if total != mpc_factor
-                if int(total/self.N) != mpc_factor:
-                    print("ERROR: Incorrect settings", total/self.N, mpc_factor)
                 if k == 0:
                     X_ref = self.path_plan(X_in=X_traj[k, :])
                     X_refN = X_ref[::int(self.mpc_factor)]  # self.traj_N(X_ref)
-                    force_f, X_pred = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN)
+                    U_pred, X_pred = self.mpc.mpcontrol(X_in=X_traj[k, :], X_ref=X_refN)
                     for i in range(0, self.N):
-                        f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(force_f[i, :], j))
-
+                        f_hist[int(i*j):int(i*j+j), :] = list(itertools.repeat(U_pred[i, :], j))
             s_hist[k] = s
             X_traj[k+1, :] = self.rk4(xk=X_traj[k, :], uk=f_hist[k, :])
             # X_traj[k + 1, :] = self.dynamics_dt(X=X_traj[k, :], U=f_hist[k, :], t=self.dt)
@@ -138,7 +149,7 @@ class Runner:
         # print(X_traj[-1, :])
         # print(f_hist[4500, :])
         plots.fplot(total, p_hist=X_traj[:, 0:self.n_u], f_hist=f_hist, s_hist=s_hist, dims=self.dims)
-        plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
+        # plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u], dims=self.dims)
         plots.posfplot(p_ref=self.X_f[0:self.n_u], p_hist=X_traj[:, 0:self.n_u],
                        p_pred_hist=p_pred_hist, f_pred_hist=f_pred_hist, pf_hist=pf_ref, dims=self.dims)
         # plots.posplot(p_ref=self.X_f[0:self.n_u], p_hist=X_pred_hist[:, 0:self.n_u, 1], dims=self.dims)
@@ -182,6 +193,14 @@ class Runner:
         else:
             s = 1  # scheduled stance
         return s
+
+    def contact_map(self, N, dt, ts, t0):
+        # generate vector of scheduled contact states over the mpc's prediction horizon
+        C = np.zeros(N)
+        for k in range(0, N):
+            C[k] = self.gait_scheduler(t=ts, t0=t0)
+            ts += dt
+        return C
 
     def path_plan(self, X_in):
         # Path planner--generate reference trajectory
