@@ -27,7 +27,7 @@ class Mpc:
         self.R = np.eye(n_u)
         self.n_x = n_x
         self.n_u = n_u
-        np.fill_diagonal(self.Q, [1., 1., 10., 0.1, 0.1, 0.1])
+        np.fill_diagonal(self.Q, [1., 1., 15., 0.1, 0.1, 0.1])
         np.fill_diagonal(self.R, [0., 0., 0.])
 
     def mpcontrol(self, X_in, X_ref, Ck):
